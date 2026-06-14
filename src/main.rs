@@ -27,10 +27,11 @@ fn main() {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([680.0, 520.0])
+            .with_inner_size([720.0, 540.0])
             .with_decorations(false)
             .with_resizable(false)
-            .with_always_on_top(),
+            .with_always_on_top()
+            .with_transparent(true),
         centered: true,
         ..Default::default()
     };

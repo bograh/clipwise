@@ -25,15 +25,15 @@ fn relative_time(dt: &DateTime<Utc>, now: DateTime<Utc>) -> String {
     if secs < 60 {
         "Just now".to_string()
     } else if mins < 60 {
-        format!("{} min ago", mins)
+        format!("{}m ago", mins)
     } else if hours < 24 {
-        format!("{} hr ago", hours)
+        format!("{}h ago", hours)
     } else if days == 1 {
         "Yesterday".to_string()
     } else if days < 7 {
-        format!("{} days ago", days)
+        format!("{}d ago", days)
     } else {
-        dt.format("%b %-d, %Y").to_string()
+        dt.format("%b %-d").to_string()
     }
 }
 
@@ -85,39 +85,59 @@ fn date_group(dt: &DateTime<Utc>, now: &DateTime<Utc>) -> &'static str {
     match days {
         0 => "Today",
         1 => "Yesterday",
-        2..=6 => "This Week",
-        7..=30 => "This Month",
+        2..=6 => "Earlier this week",
+        7..=30 => "This month",
         _ => "Older",
     }
 }
 
-fn draw_doc_icon(ui: &mut egui::Ui, size: f32) {
+fn draw_clip_icon(ui: &mut egui::Ui, size: f32, is_pinned: bool) {
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
     let painter = ui.painter();
-    let w = size * 0.50;
-    let h = size * 0.62;
-    let doc_rect = Rect::from_center_size(rect.center(), Vec2::new(w, h));
-    painter.rect_filled(doc_rect, 2.0, ICON_COLOR);
-    let line_color = Color32::from_rgba_unmultiplied(220, 220, 230, 55);
-    let lx1 = doc_rect.min.x + 2.5;
-    let lx2 = doc_rect.max.x - 2.5;
-    for (i, frac) in [0.30_f32, 0.52, 0.74].iter().enumerate() {
-        let ly = doc_rect.min.y + h * frac;
-        let rx = if i == 2 { lx2 - 3.0 } else { lx2 };
-        painter.line_segment(
-            [Pos2::new(lx1, ly), Pos2::new(rx, ly)],
-            Stroke::new(1.0, line_color),
+    let center = rect.center();
+    let r = size * 0.35;
+
+    if is_pinned {
+        let pin_pts = [
+            Pos2::new(center.x, center.y - r),
+            Pos2::new(center.x + r * 0.45, center.y - r * 0.3),
+            Pos2::new(center.x + r * 0.45, center.y + r * 0.5),
+            Pos2::new(center.x, center.y + r),
+            Pos2::new(center.x - r * 0.45, center.y + r * 0.5),
+            Pos2::new(center.x - r * 0.45, center.y - r * 0.3),
+        ];
+        let path = egui::epaint::PathShape::convex_polygon(
+            pin_pts.to_vec(),
+            Color32::from_rgb(60, 80, 160),
+            Stroke::NONE,
         );
+        painter.add(path);
+        painter.circle_filled(center, r * 0.35, PIN_COLOR);
+    } else {
+        let doc_w = size * 0.40;
+        let doc_h = size * 0.52;
+        let doc_rect = Rect::from_center_size(center, Vec2::new(doc_w, doc_h));
+        painter.rect_filled(doc_rect, 3.0, Color32::from_rgba_unmultiplied(100, 130, 255, 25));
+        painter.rect_stroke(doc_rect, 3.0, Stroke::new(1.0, Color32::from_rgba_unmultiplied(100, 140, 255, 50)));
+        let lx1 = doc_rect.min.x + 3.0;
+        let lx2 = doc_rect.max.x - 3.0;
+        for frac in [0.30_f32, 0.52, 0.74] {
+            let ly = doc_rect.min.y + doc_h * frac;
+            painter.line_segment(
+                [Pos2::new(lx1, ly), Pos2::new(lx2, ly)],
+                Stroke::new(1.0, Color32::from_rgba_unmultiplied(140, 160, 220, 60)),
+            );
+        }
     }
 }
 
 fn section_label(ui: &mut egui::Ui, text: &str) {
-    ui.add_space(8.0);
+    ui.add_space(10.0);
     ui.horizontal(|ui| {
-        ui.add_space(12.0);
-        ui.label(RichText::new(text).size(11.0).color(TEXT_MUTED));
+        ui.add_space(14.0);
+        ui.label(RichText::new(text).size(10.5).color(TEXT_MUTED).strong());
     });
-    ui.add_space(3.0);
+    ui.add_space(4.0);
 }
 
 fn render_item_row(
@@ -127,27 +147,32 @@ fn render_item_row(
     is_selected: bool,
     in_confirm_delete: bool,
 ) -> Option<RowAction> {
-    let row_height = if in_confirm_delete { 72.0_f32 } else { 42.0_f32 };
+    let row_height = if in_confirm_delete { 68.0_f32 } else { 46.0_f32 };
     let row_min = ui.cursor().min;
     let row_width = ui.available_width();
     let row_rect = Rect::from_min_size(row_min, Vec2::new(row_width, row_height));
 
     let is_hovered = ui.rect_contains_pointer(row_rect);
-    let bg = if is_selected {
+    let bg = if in_confirm_delete {
+        Color32::from_rgba_unmultiplied(255, 85, 85, 20)
+    } else if is_selected {
         BG_SELECTED
     } else if is_hovered {
         BG_HOVER
     } else {
-        BG_PRIMARY
+        Color32::TRANSPARENT
     };
-    ui.painter().rect_filled(row_rect, 0.0, bg);
+
+    if bg != Color32::TRANSPARENT {
+        ui.painter().rect_filled(row_rect, 6.0, bg);
+    }
 
     if is_selected {
-        ui.painter().rect_filled(
-            Rect::from_min_size(row_min, Vec2::new(2.5, row_height)),
-            0.0,
-            ACCENT_BLUE,
+        let bar_rect = Rect::from_min_size(
+            Pos2::new(row_min.x + 4.0, row_min.y + 6.0),
+            Vec2::new(3.0, row_height - 12.0),
         );
+        ui.painter().rect_filled(bar_rect, 2.0, ACCENT);
     }
 
     let mut action: Option<RowAction> = None;
@@ -157,29 +182,30 @@ fn render_item_row(
         Layout::left_to_right(Align::Center),
         |ui| {
             if in_confirm_delete {
-                ui.add_space(14.0);
+                ui.add_space(16.0);
                 ui.vertical(|ui| {
-                    ui.add_space(8.0);
-                    ui.label(RichText::new("Delete this item?").color(TEXT_PRIMARY).size(13.0));
+                    ui.add_space(6.0);
+                    ui.label(RichText::new("Delete this clip?").color(TEXT_BRIGHT).size(12.5));
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         if ui
                             .add(
                                 egui::Button::new(
-                                    RichText::new("Cancel").size(12.0).color(TEXT_SECONDARY),
+                                    RichText::new("Cancel").size(11.5).color(TEXT_SECONDARY),
                                 )
                                 .fill(BG_ELEVATED)
-                                .rounding(Rounding::same(5.0)),
+                                .rounding(Rounding::same(5.0))
+                                .stroke(Stroke::new(1.0, BORDER_SUBTLE)),
                             )
                             .clicked()
                         {
                             action = Some(RowAction::CancelDelete);
                         }
-                        ui.add_space(4.0);
+                        ui.add_space(6.0);
                         if ui
                             .add(
                                 egui::Button::new(
-                                    RichText::new("Delete").size(12.0).color(Color32::WHITE),
+                                    RichText::new("Delete").size(11.5).color(Color32::WHITE),
                                 )
                                 .fill(ACCENT_RED)
                                 .rounding(Rounding::same(5.0)),
@@ -191,11 +217,16 @@ fn render_item_row(
                     });
                 });
             } else {
-                ui.add_space(12.0);
-                draw_doc_icon(ui, 28.0);
+                ui.add_space(14.0);
+                draw_clip_icon(ui, 26.0, item.pinned);
                 ui.add_space(10.0);
-                let preview = truncate_content(&item.content, 58);
-                ui.label(RichText::new(preview).color(TEXT_PRIMARY).size(13.0));
+                ui.vertical(|ui| {
+                    let preview = truncate_content(&item.content, 50);
+                    ui.label(RichText::new(preview).color(TEXT_PRIMARY).size(12.5));
+                    ui.add_space(2.0);
+                    let time = relative_time(&item.copied_at, Utc::now());
+                    ui.label(RichText::new(time).size(10.0).color(TEXT_MUTED));
+                });
             }
         },
     );
@@ -205,21 +236,356 @@ fn render_item_row(
         if row_response.clicked() {
             action = Some(RowAction::Select(disp_idx));
         }
+        if row_response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
     }
 
     action
 }
 
 fn metadata_row(ui: &mut egui::Ui, key: &str, value: &str) {
-    ui.add_space(2.0);
     ui.horizontal(|ui| {
-        ui.label(RichText::new(key).size(12.0).color(TEXT_MUTED));
+        ui.add_space(2.0);
+        ui.label(RichText::new(key).size(11.0).color(TEXT_MUTED));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(4.0);
-            ui.label(RichText::new(value).size(12.0).color(TEXT_PRIMARY));
+            ui.label(RichText::new(value).size(11.0).color(TEXT_SECONDARY));
         });
     });
-    ui.add_space(4.0);
+    ui.add_space(6.0);
+}
+
+fn render_search_bar(ctx: &egui::Context, app: &mut ClipwiseApp) {
+    egui::TopBottomPanel::top("search_bar")
+        .exact_height(54.0)
+        .frame(
+            Frame::none()
+                .fill(BG_SURFACE)
+                .inner_margin(Margin::same(0.0))
+                .stroke(Stroke::new(1.0, BORDER_SUBTLE)),
+        )
+        .show(ctx, |ui| {
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add_space(12.0);
+
+                let dismiss = ui.add(
+                    egui::Button::new(RichText::new("✕").size(13.0).color(TEXT_MUTED))
+                        .frame(false)
+                        .rounding(Rounding::same(4.0)),
+                );
+                if dismiss.clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                    app.focus_requested = false;
+                    app.confirm_delete = None;
+                }
+                if dismiss.hovered() {
+                    ui.painter().rect_filled(
+                        dismiss.rect,
+                        4.0,
+                        Color32::from_rgba_unmultiplied(255, 255, 255, 8),
+                    );
+                }
+
+                ui.add_space(8.0);
+
+                let search_width = (ui.available_width() - 130.0).max(100.0);
+
+                Frame::none()
+                    .fill(BG_ELEVATED)
+                    .rounding(Rounding::same(8.0))
+                    .inner_margin(Margin::symmetric(10.0, 6.0))
+                    .stroke(Stroke::new(1.0, if app.search_query.is_empty() { BORDER_SUBTLE } else { Color32::from_rgb(60, 80, 160) }))
+                    .show(ui, |ui| {
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            ui.label(RichText::new("🔍").size(12.0));
+                            ui.add_space(6.0);
+                            let search_w = search_width - 60.0;
+                            let resp = ui.add_sized(
+                                Vec2::new(search_w, 20.0),
+                                egui::TextEdit::singleline(&mut app.search_query)
+                                    .hint_text("Search clips…")
+                                    .frame(false)
+                                    .text_color(TEXT_PRIMARY),
+                            );
+                            if !app.focus_requested {
+                                resp.request_focus();
+                                app.focus_requested = true;
+                            }
+                            if !app.search_query.is_empty() {
+                                ui.add_space(4.0);
+                                if ui
+                                    .add(
+                                        egui::Button::new(RichText::new("×").size(11.0).color(TEXT_MUTED))
+                                            .frame(false),
+                                    )
+                                    .clicked()
+                                {
+                                    app.search_query.clear();
+                                }
+                            }
+                        });
+                    });
+
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.add_space(10.0);
+                    Frame::none()
+                        .fill(BG_ELEVATED)
+                        .rounding(Rounding::same(PILL_RADIUS))
+                        .inner_margin(Margin::symmetric(8.0, 4.0))
+                        .stroke(Stroke::new(1.0, BORDER_SUBTLE))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("≡").size(10.0).color(TEXT_MUTED));
+                                ui.add_space(3.0);
+                                ui.label(RichText::new("All").size(11.0).color(TEXT_SECONDARY));
+                                ui.add_space(2.0);
+                                ui.label(RichText::new("▾").size(8.0).color(TEXT_MUTED));
+                            });
+                        });
+                });
+            });
+        });
+}
+
+fn render_action_bar(ctx: &egui::Context, has_items: bool) {
+    egui::TopBottomPanel::bottom("action_bar")
+        .exact_height(36.0)
+        .frame(
+            Frame::none()
+                .fill(BG_SURFACE)
+                .inner_margin(Margin::symmetric(14.0, 0.0))
+                .stroke(Stroke::new(1.0, BORDER_SUBTLE)),
+        )
+        .show(ctx, |ui| {
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.label(RichText::new("Clipwise").size(11.0).color(TEXT_MUTED).strong());
+
+                if has_items {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.add_space(2.0);
+                        key_badge(ui, "K", 3.0);
+                        key_badge(ui, "Ctrl", 0.0);
+                        ui.add_space(5.0);
+                        ui.label(RichText::new("Show").size(10.5).color(TEXT_MUTED));
+
+                        ui.add_space(14.0);
+
+                        key_badge(ui, "↵", 3.0);
+                        ui.add_space(5.0);
+                        ui.label(RichText::new("Paste").size(10.5).color(TEXT_SECONDARY));
+
+                        ui.add_space(14.0);
+
+                        key_badge(ui, "⌫", 3.0);
+                        ui.add_space(5.0);
+                        ui.label(RichText::new("Delete").size(10.5).color(TEXT_MUTED));
+                    });
+                }
+            });
+        });
+}
+
+fn key_badge(ui: &mut egui::Ui, text: &str, right_space: f32) {
+    Frame::none()
+        .fill(KEY_BG)
+        .rounding(Rounding::same(4.0))
+        .inner_margin(Margin::symmetric(5.0, 2.0))
+        .stroke(Stroke::new(1.0, KEY_BORDER))
+        .show(ui, |ui| {
+            ui.label(RichText::new(text).size(10.0).color(TEXT_SECONDARY).strong());
+        });
+    ui.add_space(right_space);
+}
+
+fn render_list_panel(ctx: &egui::Context, app: &mut ClipwiseApp) -> Option<RowAction> {
+    let now = Utc::now();
+    let filtered_items = compute_filtered(&app.items, &app.search_query);
+    let mut ui_action: Option<RowAction> = None;
+
+    egui::SidePanel::left("list_panel")
+        .exact_width(270.0)
+        .resizable(false)
+        .frame(Frame::none().fill(BG_BASE))
+        .show_separator_line(false)
+        .show(ctx, |ui| {
+            let pinned_indices: Vec<usize> = filtered_items
+                .iter()
+                .copied()
+                .filter(|&i| app.items[i].pinned)
+                .collect();
+            let unpinned_indices: Vec<usize> = filtered_items
+                .iter()
+                .copied()
+                .filter(|&i| !app.items[i].pinned)
+                .collect();
+
+            ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.add_space(4.0);
+
+                    if filtered_items.is_empty() {
+                        ui.add_space(64.0);
+                        ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                            let msg = if app.search_query.is_empty() {
+                                "No clips yet"
+                            } else {
+                                "No matching clips"
+                            };
+                            ui.label(RichText::new(msg).size(13.0).color(TEXT_MUTED));
+                            ui.add_space(6.0);
+                            ui.label(
+                                RichText::new("Copy something to get started")
+                                    .size(11.0)
+                                    .color(Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
+                            );
+                        });
+                        return;
+                    }
+
+                    if !pinned_indices.is_empty() {
+                        section_label(ui, "PINNED");
+                        for &item_idx in &pinned_indices {
+                            let disp_idx = filtered_items
+                                .iter()
+                                .position(|&i| i == item_idx)
+                                .unwrap_or(0);
+                            let is_selected = disp_idx == app.selected_index;
+                            let in_confirm = app
+                                .confirm_delete
+                                .as_deref()
+                                .map_or(false, |id| id == app.items[item_idx].id);
+                            if let Some(a) = render_item_row(
+                                ui,
+                                &app.items[item_idx],
+                                disp_idx,
+                                is_selected,
+                                in_confirm,
+                            ) {
+                                ui_action = Some(a);
+                            }
+                        }
+                    }
+
+                    if !unpinned_indices.is_empty() {
+                        let mut current_group = "";
+                        for &item_idx in &unpinned_indices {
+                            let group = date_group(&app.items[item_idx].copied_at, &now);
+                            if group != current_group {
+                                current_group = group;
+                                section_label(ui, group);
+                            }
+                            let disp_idx = filtered_items
+                                .iter()
+                                .position(|&i| i == item_idx)
+                                .unwrap_or(0);
+                            let is_selected = disp_idx == app.selected_index;
+                            let in_confirm = app
+                                .confirm_delete
+                                .as_deref()
+                                .map_or(false, |id| id == app.items[item_idx].id);
+                            if let Some(a) = render_item_row(
+                                ui,
+                                &app.items[item_idx],
+                                disp_idx,
+                                is_selected,
+                                in_confirm,
+                            ) {
+                                ui_action = Some(a);
+                            }
+                        }
+                    }
+                });
+        });
+
+    ui_action
+}
+
+fn render_detail_panel(ctx: &egui::Context, selected_item: Option<&ClipboardItem>, now: DateTime<Utc>) {
+    egui::CentralPanel::default()
+        .frame(Frame::none().fill(BG_DETAIL))
+        .show(ctx, |ui| {
+            if let Some(item) = selected_item {
+                ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.add_space(8.0);
+
+                        Frame::none()
+                            .fill(BG_CARD)
+                            .rounding(Rounding::same(CARD_RADIUS))
+                            .inner_margin(Margin::symmetric(16.0, 14.0))
+                            .stroke(Stroke::new(1.0, BORDER_SUBTLE))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    RichText::new(&item.content)
+                                        .size(13.0)
+                                        .color(TEXT_PRIMARY),
+                                );
+                            });
+
+                        ui.add_space(12.0);
+
+                        Frame::none()
+                            .fill(BG_CARD)
+                            .rounding(Rounding::same(CARD_RADIUS))
+                            .inner_margin(Margin::symmetric(16.0, 12.0))
+                            .stroke(Stroke::new(1.0, BORDER_SUBTLE))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    RichText::new("Details")
+                                        .size(10.5)
+                                        .color(TEXT_MUTED)
+                                        .strong(),
+                                );
+                                ui.add_space(8.0);
+
+                                metadata_row(ui, "Type", "Text");
+
+                                let char_count = item.content.chars().count();
+                                metadata_row(ui, "Characters", &char_count.to_string());
+
+                                let time_str = relative_time(&item.copied_at, now);
+                                metadata_row(ui, "Copied", &time_str);
+
+                                if item.pinned {
+                                    metadata_row(ui, "Pinned", "Yes");
+                                }
+                            });
+
+                        ui.add_space(8.0);
+
+                        ui.horizontal(|ui| {
+                            ui.add_space(4.0);
+                            key_badge(ui, "Enter", 3.0);
+                            ui.label(RichText::new("Copy & close").size(10.5).color(TEXT_MUTED));
+                            ui.add_space(12.0);
+                            key_badge(ui, "Ctrl+D", 3.0);
+                            ui.label(RichText::new("Pin/Unpin").size(10.5).color(TEXT_MUTED));
+                            ui.add_space(12.0);
+                            key_badge(ui, "Del", 3.0);
+                            ui.label(RichText::new("Delete").size(10.5).color(TEXT_MUTED));
+                        });
+                    });
+            } else {
+                let rect = ui.max_rect();
+                ui.vertical_centered(|ui| {
+                    ui.add_space(rect.height() / 2.0 - 40.0);
+                    ui.label(
+                        RichText::new("Select a clip")
+                            .size(14.0)
+                            .color(Color32::from_rgba_unmultiplied(255, 255, 255, 25)),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new("Use ↑↓ then Enter to paste")
+                            .size(11.0)
+                            .color(Color32::from_rgba_unmultiplied(255, 255, 255, 15)),
+                    );
+                });
+            }
+        });
 }
 
 pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
@@ -302,266 +668,14 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
         .and_then(|&idx| app.items.get(idx))
         .cloned();
 
-    let mut ui_action: Option<RowAction> = None;
+    let has_items = !app.items.is_empty();
 
-    // ── Bottom action bar ────────────────────────────────────────────────────
-    egui::TopBottomPanel::bottom("action_bar")
-        .exact_height(40.0)
-        .frame(Frame::none().fill(BG_PRIMARY).inner_margin(Margin::symmetric(14.0, 0.0)))
-        .show(ctx, |ui| {
-            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                ui.label(RichText::new("📋").size(12.0).color(TEXT_MUTED));
-                ui.add_space(6.0);
-                ui.label(RichText::new("Clipboard History").size(12.0).color(TEXT_MUTED));
+    render_search_bar(ctx, app);
+    render_action_bar(ctx, has_items);
+    let list_action = render_list_panel(ctx, app);
+    render_detail_panel(ctx, selected_item.as_ref(), now);
 
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.add_space(2.0);
-                    Frame::none()
-                        .fill(KEY_BG)
-                        .rounding(Rounding::same(4.0))
-                        .inner_margin(Margin::symmetric(5.0, 2.0))
-                        .show(ui, |ui| {
-                            ui.label(RichText::new("K").size(11.0).color(TEXT_SECONDARY));
-                        });
-                    Frame::none()
-                        .fill(KEY_BG)
-                        .rounding(Rounding::same(4.0))
-                        .inner_margin(Margin::symmetric(5.0, 2.0))
-                        .show(ui, |ui| {
-                            ui.label(RichText::new("Ctrl").size(11.0).color(TEXT_SECONDARY));
-                        });
-                    ui.add_space(3.0);
-                    ui.label(RichText::new("Actions").size(12.0).color(TEXT_MUTED));
-
-                    ui.add_space(14.0);
-
-                    Frame::none()
-                        .fill(KEY_BG)
-                        .rounding(Rounding::same(4.0))
-                        .inner_margin(Margin::symmetric(5.0, 2.0))
-                        .show(ui, |ui| {
-                            ui.label(RichText::new("↩").size(11.0).color(TEXT_SECONDARY));
-                        });
-                    ui.add_space(3.0);
-                    ui.label(RichText::new("Paste").size(12.0).color(TEXT_PRIMARY));
-                });
-            });
-        });
-
-    // ── Top search + filter bar ──────────────────────────────────────────────
-    egui::TopBottomPanel::top("search_bar")
-        .exact_height(50.0)
-        .frame(Frame::none().fill(BG_PRIMARY))
-        .show_separator_line(true)
-        .show(ctx, |ui| {
-            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                ui.add_space(10.0);
-
-                // Back/dismiss arrow
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new("←").size(16.0).color(TEXT_MUTED))
-                            .frame(false),
-                    )
-                    .clicked()
-                {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-                    app.focus_requested = false;
-                    app.confirm_delete = None;
-                }
-
-                ui.add_space(10.0);
-
-                // Calculate search width leaving room for filter pill
-                let filter_pill_width = 122.0_f32;
-                let right_pad = 12.0_f32;
-                let arrow_and_gap = 46.0_f32;
-                let search_w =
-                    (ui.available_width() - filter_pill_width - right_pad - arrow_and_gap)
-                        .max(80.0);
-
-                let resp = ui.add_sized(
-                    Vec2::new(search_w, 32.0),
-                    egui::TextEdit::singleline(&mut app.search_query)
-                        .hint_text("Type to filter entries…")
-                        .frame(false),
-                );
-                if !app.focus_requested {
-                    resp.request_focus();
-                    app.focus_requested = true;
-                }
-
-                ui.add_space(8.0);
-
-                // All Types filter pill (visual)
-                Frame::none()
-                    .fill(BG_ELEVATED)
-                    .rounding(Rounding::same(6.0))
-                    .inner_margin(Margin::symmetric(8.0, 5.0))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("≡").size(11.0).color(TEXT_MUTED));
-                            ui.add_space(4.0);
-                            ui.label(RichText::new("All Types").size(12.0).color(TEXT_PRIMARY));
-                            ui.add_space(4.0);
-                            ui.label(RichText::new("▾").size(9.0).color(TEXT_MUTED));
-                        });
-                    });
-
-                ui.add_space(10.0);
-            });
-        });
-
-    // ── Left list panel ──────────────────────────────────────────────────────
-    egui::SidePanel::left("list_panel")
-        .exact_width(264.0)
-        .resizable(false)
-        .frame(Frame::none().fill(BG_PRIMARY))
-        .show_separator_line(true)
-        .show(ctx, |ui| {
-            let pinned_indices: Vec<usize> = filtered_items
-                .iter()
-                .copied()
-                .filter(|&i| app.items[i].pinned)
-                .collect();
-            let unpinned_indices: Vec<usize> = filtered_items
-                .iter()
-                .copied()
-                .filter(|&i| !app.items[i].pinned)
-                .collect();
-
-            ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    if filtered_items.is_empty() {
-                        ui.add_space(48.0);
-                        ui.with_layout(Layout::top_down(Align::Center), |ui| {
-                            let msg = if app.search_query.is_empty() {
-                                "No clipboard history yet"
-                            } else {
-                                "No results"
-                            };
-                            ui.label(RichText::new(msg).size(13.0).color(TEXT_MUTED));
-                        });
-                        return;
-                    }
-
-                    // Pinned section
-                    if !pinned_indices.is_empty() {
-                        section_label(ui, "Pinned");
-                        for &item_idx in &pinned_indices {
-                            let disp_idx = filtered_items
-                                .iter()
-                                .position(|&i| i == item_idx)
-                                .unwrap_or(0);
-                            let is_selected = disp_idx == app.selected_index;
-                            let in_confirm = app
-                                .confirm_delete
-                                .as_deref()
-                                .map_or(false, |id| id == app.items[item_idx].id);
-                            if let Some(a) = render_item_row(
-                                ui,
-                                &app.items[item_idx],
-                                disp_idx,
-                                is_selected,
-                                in_confirm,
-                            ) {
-                                ui_action = Some(a);
-                            }
-                        }
-                    }
-
-                    // Unpinned items, grouped by date
-                    if !unpinned_indices.is_empty() {
-                        let mut current_group = "";
-                        for &item_idx in &unpinned_indices {
-                            let group = date_group(&app.items[item_idx].copied_at, &now);
-                            if group != current_group {
-                                current_group = group;
-                                section_label(ui, group);
-                            }
-                            let disp_idx = filtered_items
-                                .iter()
-                                .position(|&i| i == item_idx)
-                                .unwrap_or(0);
-                            let is_selected = disp_idx == app.selected_index;
-                            let in_confirm = app
-                                .confirm_delete
-                                .as_deref()
-                                .map_or(false, |id| id == app.items[item_idx].id);
-                            if let Some(a) = render_item_row(
-                                ui,
-                                &app.items[item_idx],
-                                disp_idx,
-                                is_selected,
-                                in_confirm,
-                            ) {
-                                ui_action = Some(a);
-                            }
-                        }
-                    }
-                });
-        });
-
-    // ── Right detail panel ───────────────────────────────────────────────────
-    egui::CentralPanel::default()
-        .frame(Frame::none().fill(BG_DETAIL))
-        .show(ctx, |ui| {
-            if let Some(ref item) = selected_item {
-                ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        // Full content
-                        Frame::none()
-                            .inner_margin(Margin::symmetric(18.0, 16.0))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new(&item.content).size(13.0).color(TEXT_PRIMARY),
-                                );
-                            });
-
-                        // Information section separator
-                        let sep_y = ui.cursor().min.y;
-                        let sep_x1 = ui.min_rect().min.x;
-                        let sep_x2 = ui.min_rect().max.x;
-                        ui.painter().line_segment(
-                            [Pos2::new(sep_x1, sep_y), Pos2::new(sep_x2, sep_y)],
-                            Stroke::new(1.0, SEPARATOR),
-                        );
-
-                        // Metadata
-                        Frame::none()
-                            .inner_margin(Margin::symmetric(18.0, 12.0))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new("Information").size(11.0).color(TEXT_MUTED),
-                                );
-                                ui.add_space(8.0);
-
-                                metadata_row(ui, "Type", "Text");
-
-                                let char_count = item.content.chars().count();
-                                metadata_row(ui, "Characters", &char_count.to_string());
-
-                                let time_str = relative_time(&item.copied_at, now);
-                                metadata_row(ui, "Copied", &time_str);
-                            });
-                    });
-            } else {
-                // Empty state
-                let rect = ui.max_rect();
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    "No item selected",
-                    egui::FontId::proportional(13.0),
-                    TEXT_MUTED,
-                );
-            }
-        });
-
-    // ── Apply actions ────────────────────────────────────────────────────────
-    match ui_action {
+    match list_action {
         Some(RowAction::Select(disp_idx)) => {
             app.selected_index = disp_idx;
             app.confirm_delete = None;
