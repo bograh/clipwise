@@ -226,7 +226,9 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
         if !app.search_query.is_empty() {
             app.search_query.clear();
         } else {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            app.focus_requested = false;
+            app.confirm_delete = None;
         }
     }
 
@@ -247,7 +249,9 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
                 }
             }
         }
-        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        app.focus_requested = false;
+        app.confirm_delete = None;
     }
 
     if do_ctrl_d {

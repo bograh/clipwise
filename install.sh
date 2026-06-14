@@ -85,10 +85,11 @@ cat > "$DESKTOP_FILE" <<EOF
 Type=Application
 Name=Clipwise
 Comment=Clipboard history manager
-Exec=$INSTALL_DIR/clipwise
+Exec=env WINIT_UNIX_BACKEND=x11 $INSTALL_DIR/clipwise
 Icon=edit-paste
 Hidden=false
 NoDisplay=false
+StartupNotify=false
 X-GNOME-Autostart-enabled=true
 EOF
 
@@ -96,5 +97,34 @@ success "Autostart entry created at $DESKTOP_FILE"
 
 # ── 6. Run ────────────────────────────────────────────────────────────────────
 
-success "All done! Launching Clipwise..."
-exec "$INSTALL_DIR/clipwise"
+# Kill any running instance so we start fresh with the new binary.
+pkill -x clipwise 2>/dev/null || true
+for i in $(seq 1 10); do
+    pgrep -x clipwise > /dev/null || break
+    sleep 0.1
+done
+rm -f "${XDG_RUNTIME_DIR:-$HOME/.local/share/clipwise}/clipwise.sock"
+
+info "Starting Clipwise daemon in background..."
+"$INSTALL_DIR/clipwise" &
+disown
+success "Clipwise is running (window hidden)."
+
+# ── 7. Hotkey instructions ────────────────────────────────────────────────────
+
+echo ""
+success "Bind Super+V in your window manager to: $INSTALL_DIR/clipwise"
+echo ""
+info "  i3 / i3-gaps — add to ~/.config/i3/config:"
+info "    bindsym \$mod+v exec --no-startup-id env WINIT_UNIX_BACKEND=x11 $INSTALL_DIR/clipwise"
+echo ""
+info "  Sway — add to ~/.config/sway/config:"
+info "    bindsym \$mod+v exec env WINIT_UNIX_BACKEND=x11 $INSTALL_DIR/clipwise"
+echo ""
+info "  GNOME — Settings → Keyboard → Custom Shortcuts:"
+info "    Command: env WINIT_UNIX_BACKEND=x11 $INSTALL_DIR/clipwise    Shortcut: Super+V"
+echo ""
+info "  KDE — System Settings → Shortcuts → Custom Shortcuts:"
+info "    Trigger: Super+V    Action: env WINIT_UNIX_BACKEND=x11 $INSTALL_DIR/clipwise"
+echo ""
+info "The autostart entry at $DESKTOP_FILE will start the daemon at login."
