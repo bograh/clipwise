@@ -27,6 +27,7 @@ impl ClipwiseApp {
         show_receiver: Receiver<()>,
     ) -> Self {
         crate::theme::setup_visuals(&cc.egui_ctx);
+        // show_tx is moved into the IPC listener thread; only show_receiver is retained.
         crate::ipc::start_listener(show_tx, cc.egui_ctx.clone());
         Self {
             items,
@@ -56,6 +57,7 @@ impl eframe::App for ClipwiseApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.search_query.clear();
+            self.selected_index = 0;
             self.focus_requested = false;
         }
 
