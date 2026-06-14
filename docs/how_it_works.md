@@ -14,19 +14,19 @@ Clipwise is a single-process application with two concurrent execution paths:
 They communicate through a lock-free channel. No daemon, no IPC socket, no external process.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    clipwise process                  │
-│                                                     │
-│  ┌──────────────────┐   channel   ┌───────────────┐ │
-│  │  Clipboard        │ ──────────► │   UI thread   │ │
-│  │  Watcher Thread  │             │  (egui/eframe)│ │
-│  └──────────────────┘             └───────┬───────┘ │
-│                                           │         │
-│                                    ┌──────▼──────┐  │
-│                                    │   sled DB   │  │
-│                                    │  (~/.local) │  │
-│                                    └─────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                   clipwise process                   │
+│                                                      │
+│  ┌────────────────────┐  channel  ┌───────────────┐  │
+│  │  Clipboard watcher │ ────────► │   UI thread   │  │
+│  │      thread        │           │ (egui/eframe) │  │
+│  └────────────────────┘           └───────┬───────┘  │
+│                                           │          │
+│                                    ┌──────▼──────┐   │
+│                                    │   sled DB   │   │
+│                                    │  (~/.local) │   │
+│                                    └─────────────┘   │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
