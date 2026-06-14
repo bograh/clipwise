@@ -1,5 +1,6 @@
 mod app;
 mod clipboard;
+mod ipc;
 mod storage;
 mod theme;
 mod ui;
