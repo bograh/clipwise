@@ -31,6 +31,35 @@ impl Storage {
         Ok(())
     }
 
+    // Upsert a single item and refresh the stored order in one flush.
+    // Avoids the clear+rewrite of save_all when only one item changed.
+    pub fn save_item_and_order(
+        &self,
+        item: &ClipboardItem,
+        items: &[ClipboardItem],
+    ) -> Result<(), Box<dyn Error>> {
+        let tree = self.db.open_tree("items")?;
+        tree.insert(item.id.as_bytes(), serde_json::to_vec(item)?)?;
+        let order: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        tree.insert(b"__order__", serde_json::to_vec(&order)?)?;
+        self.db.flush()?;
+        Ok(())
+    }
+
+    // Remove a single item from sled and refresh the stored order in one flush.
+    pub fn delete_item_and_order(
+        &self,
+        id: &str,
+        items: &[ClipboardItem],
+    ) -> Result<(), Box<dyn Error>> {
+        let tree = self.db.open_tree("items")?;
+        tree.remove(id.as_bytes())?;
+        let order: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        tree.insert(b"__order__", serde_json::to_vec(&order)?)?;
+        self.db.flush()?;
+        Ok(())
+    }
+
     pub fn load_all(&self) -> Result<Vec<ClipboardItem>, Box<dyn Error>> {
         let tree = self.db.open_tree("items")?;
 
