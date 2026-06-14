@@ -19,7 +19,26 @@ A keyboard-first clipboard manager for Linux, built in Rust. Captures everything
 
 ---
 
-## Quick Install
+## Download (no Rust required)
+
+Grab the latest release from the [Releases page](https://github.com/bograh/clipwise/releases):
+
+**AppImage — recommended, runs on any Linux distro:**
+```bash
+chmod +x Clipwise-*.AppImage
+./Clipwise-*.AppImage
+```
+
+**Raw binary — requires libxcb + libwayland on the system:**
+```bash
+chmod +x clipwise-linux-x86_64
+mv clipwise-linux-x86_64 ~/.local/bin/clipwise
+clipwise
+```
+
+---
+
+## Build from Source
 
 Clone the repo and run the install script. It handles everything — prerequisites, Rust (if not installed), the build, adding the binary to `~/.local/bin`, and wiring up autostart:
 
