@@ -58,6 +58,7 @@ impl eframe::App for ClipwiseApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             self.search_query.clear();
             self.selected_index = 0;
+            self.confirm_delete = None;
             self.focus_requested = false;
         }
 
