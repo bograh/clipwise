@@ -11,6 +11,7 @@ pub struct ClipwiseApp {
     pub search_query: String,
     pub storage: Storage,
     pub receiver: Receiver<ClipboardItem>,
+    pub show_receiver: Receiver<()>,
     pub confirm_delete: Option<String>,
     pub selected_index: usize,
     pub focus_requested: bool,
@@ -22,13 +23,17 @@ impl ClipwiseApp {
         items: Vec<ClipboardItem>,
         storage: Storage,
         receiver: Receiver<ClipboardItem>,
+        show_tx: crossbeam_channel::Sender<()>,
+        show_receiver: Receiver<()>,
     ) -> Self {
         crate::theme::setup_visuals(&cc.egui_ctx);
+        crate::ipc::start_listener(show_tx, cc.egui_ctx.clone());
         Self {
             items,
             search_query: String::new(),
             storage,
             receiver,
+            show_receiver,
             confirm_delete: None,
             selected_index: 0,
             focus_requested: false,
@@ -46,6 +51,14 @@ pub fn sort_items(items: &mut Vec<ClipboardItem>) {
 
 impl eframe::App for ClipwiseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Drain show signals from the IPC listener.
+        while let Ok(()) = self.show_receiver.try_recv() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            self.search_query.clear();
+            self.focus_requested = false;
+        }
+
         while let Ok(new_item) = self.receiver.try_recv() {
             if let Some(pos) = self.items.iter().position(|i| i.content == new_item.content) {
                 // Dedup: bump timestamp and move to top. Only one item changed, so use
