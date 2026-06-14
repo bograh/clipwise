@@ -98,10 +98,14 @@ success "Autostart entry created at $DESKTOP_FILE"
 
 # Kill any running instance so we start fresh with the new binary.
 pkill -x clipwise 2>/dev/null || true
-sleep 0.3
+for i in $(seq 1 10); do
+    pgrep -x clipwise > /dev/null || break
+    sleep 0.1
+done
 
 info "Starting Clipwise daemon in background..."
 "$INSTALL_DIR/clipwise" &
+disown
 success "Clipwise is running (window hidden)."
 
 # ── 7. Hotkey instructions ────────────────────────────────────────────────────
