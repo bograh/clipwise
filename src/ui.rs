@@ -13,8 +13,7 @@ enum RowAction {
     CancelDelete,
 }
 
-fn relative_time(dt: &DateTime<Utc>) -> String {
-    let now = Utc::now();
+fn relative_time(dt: &DateTime<Utc>, now: DateTime<Utc>) -> String {
     let dur = now.signed_duration_since(*dt);
     let secs = dur.num_seconds();
     let mins = dur.num_minutes();
@@ -37,9 +36,14 @@ fn relative_time(dt: &DateTime<Utc>) -> String {
 }
 
 fn truncate_content(content: &str, max_chars: usize) -> String {
-    let chars: Vec<char> = content.chars().collect();
-    if chars.len() > max_chars {
-        chars[..max_chars].iter().collect::<String>() + "…"
+    // Walk char boundaries lazily; stop as soon as we hit the limit so we never
+    // allocate a Vec for the full content of a large clipboard entry.
+    let mut end_byte = None;
+    for (i, _) in content.char_indices().skip(max_chars).take(1) {
+        end_byte = Some(i);
+    }
+    if let Some(end) = end_byte {
+        content[..end].to_string() + "…"
     } else {
         content.replace('\n', " ").replace('\t', " ")
     }
@@ -72,6 +76,7 @@ fn render_item_row(
     item: &ClipboardItem,
     is_selected: bool,
     in_confirm_delete: bool,
+    now: DateTime<Utc>,
 ) -> Option<RowAction> {
     let row_height = if in_confirm_delete { 80.0_f32 } else { 56.0_f32 };
     let mut action: Option<RowAction> = None;
@@ -167,7 +172,7 @@ fn render_item_row(
                         let preview = truncate_content(&item.content, 80);
                         ui.label(RichText::new(preview).color(TEXT_PRIMARY).size(14.0));
                         ui.label(
-                            RichText::new(relative_time(&item.copied_at))
+                            RichText::new(relative_time(&item.copied_at, now))
                                 .color(TEXT_MUTED)
                                 .size(11.0),
                         );
@@ -192,7 +197,8 @@ fn render_item_row(
 }
 
 pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
-    let filtered_items = compute_filtered(&app.items, &app.search_query);
+    let now = Utc::now();
+    let mut filtered_items = compute_filtered(&app.items, &app.search_query);
 
     if !filtered_items.is_empty() && app.selected_index >= filtered_items.len() {
         app.selected_index = filtered_items.len().saturating_sub(1);
@@ -251,6 +257,8 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
             }
             sort_items(&mut app.items);
             let _ = app.storage.save_all(&app.items);
+            // Items mutated: recompute so the rendering below sees correct order.
+            filtered_items = compute_filtered(&app.items, &app.search_query);
         }
     }
 
@@ -261,9 +269,6 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
             }
         }
     }
-
-    // Recompute after any mutations
-    let filtered_items = compute_filtered(&app.items, &app.search_query);
 
     let mut ui_action: Option<RowAction> = None;
 
@@ -329,6 +334,7 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
                                 &app.items[item_idx],
                                 is_selected,
                                 in_confirm,
+                                now,
                             ) {
                                 ui_action = Some(a);
                             }
@@ -354,6 +360,7 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
                                 &app.items[item_idx],
                                 is_selected,
                                 in_confirm,
+                                now,
                             ) {
                                 ui_action = Some(a);
                             }
@@ -377,7 +384,7 @@ pub fn render(ctx: &egui::Context, app: &mut ClipwiseApp) {
         Some(RowAction::ConfirmDelete(id)) => {
             app.items.retain(|i| i.id != id);
             app.confirm_delete = None;
-            let _ = app.storage.save_all(&app.items);
+            let _ = app.storage.delete_item_and_order(&id, &app.items);
         }
         Some(RowAction::CancelDelete) => {
             app.confirm_delete = None;
