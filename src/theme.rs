@@ -11,7 +11,7 @@ pub const ACCENT_RED: egui::Color32 = egui::Color32::from_rgb(255, 69, 58);
 pub const TEXT_PRIMARY: egui::Color32 = egui::Color32::from_rgb(245, 245, 247);
 pub const TEXT_SECONDARY: egui::Color32 = egui::Color32::from_rgb(155, 155, 162);
 pub const TEXT_MUTED: egui::Color32 = egui::Color32::from_rgb(108, 108, 115);
-pub const ACCENT_GOLD: egui::Color32 = egui::Color32::from_rgb(255, 214, 10);
+// pub const ACCENT_GOLD: egui::Color32 = egui::Color32::from_rgb(255, 214, 10);
 
 pub fn setup_visuals(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
