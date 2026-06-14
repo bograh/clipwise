@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Clipwise
+GenericName=Clipboard Manager
+Comment=Keyboard-first clipboard history for Linux
+Exec=clipwise
+Icon=clipwise
+Categories=Utility;
+Keywords=clipboard;history;paste;copy;
+StartupNotify=false
