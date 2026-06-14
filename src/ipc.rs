@@ -45,6 +45,7 @@ pub fn start_listener(show_tx: Sender<()>, ctx: egui::Context) {
             return;
         }
     };
+    let socket_path_clone = path.clone();
     thread::spawn(move || {
         for stream in listener.incoming() {
             match stream {
@@ -54,6 +55,7 @@ pub fn start_listener(show_tx: Sender<()>, ctx: egui::Context) {
                 }
                 Err(e) => {
                     eprintln!("clipwise: IPC accept error: {e}");
+                    let _ = std::fs::remove_file(&socket_path_clone);
                     break;
                 }
             }
@@ -70,6 +72,7 @@ mod tests {
 
     #[test]
     fn socket_path_filename_is_correct() {
+        let _guard = ENV_LOCK.lock().unwrap();
         let path = socket_path();
         assert_eq!(path.file_name().unwrap(), "clipwise.sock");
     }
