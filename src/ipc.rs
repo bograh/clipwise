@@ -1,8 +1,11 @@
-use crossbeam_channel::Sender;
-use std::io::Write;
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::PathBuf;
-use std::thread;
+#[allow(unused_imports)]
+use {
+    crossbeam_channel::Sender,
+    std::io::Write,
+    std::os::unix::net::{UnixListener, UnixStream},
+    std::path::PathBuf,
+    std::thread,
+};
 
 pub fn socket_path() -> PathBuf {
     std::env::var("XDG_RUNTIME_DIR")
@@ -18,6 +21,9 @@ pub fn socket_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn socket_path_filename_is_correct() {
@@ -27,6 +33,7 @@ mod tests {
 
     #[test]
     fn socket_path_uses_xdg_runtime_dir() {
+        let _guard = ENV_LOCK.lock().unwrap();
         // Set a known value, check it appears in the path
         std::env::set_var("XDG_RUNTIME_DIR", "/tmp/clipwise_test_xdg");
         let path = socket_path();
