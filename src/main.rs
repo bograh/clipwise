@@ -30,8 +30,7 @@ fn main() {
             .with_inner_size([680.0, 520.0])
             .with_decorations(false)
             .with_resizable(false)
-            .with_always_on_top()
-            .with_visible(false),
+            .with_always_on_top(),
         centered: true,
         ..Default::default()
     };
