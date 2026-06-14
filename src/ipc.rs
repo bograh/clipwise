@@ -47,9 +47,15 @@ pub fn start_listener(show_tx: Sender<()>, ctx: egui::Context) {
     };
     thread::spawn(move || {
         for stream in listener.incoming() {
-            if stream.is_ok() {
-                let _ = show_tx.send(());
-                ctx.request_repaint();
+            match stream {
+                Ok(_) => {
+                    let _ = show_tx.send(());
+                    ctx.request_repaint();
+                }
+                Err(e) => {
+                    eprintln!("clipwise: IPC accept error: {e}");
+                    break;
+                }
             }
         }
     });
