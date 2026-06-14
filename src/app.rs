@@ -48,9 +48,16 @@ impl eframe::App for ClipwiseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(new_item) = self.receiver.try_recv() {
             if let Some(pos) = self.items.iter().position(|i| i.content == new_item.content) {
+                // Dedup: bump timestamp and move to top. Only one item changed, so use
+                // the targeted write instead of clearing and rewriting the entire tree.
                 let mut existing = self.items.remove(pos);
                 existing.copied_at = Utc::now();
+                let id = existing.id.clone();
                 self.items.insert(0, existing);
+                sort_items(&mut self.items);
+                if let Some(updated) = self.items.iter().find(|i| i.id == id) {
+                    let _ = self.storage.save_item_and_order(updated, &self.items);
+                }
             } else {
                 self.items.insert(0, new_item);
                 let unpinned_count = self.items.iter().filter(|i| !i.pinned).count();
@@ -59,9 +66,9 @@ impl eframe::App for ClipwiseApp {
                         self.items.remove(pos);
                     }
                 }
+                sort_items(&mut self.items);
+                let _ = self.storage.save_all(&self.items);
             }
-            sort_items(&mut self.items);
-            let _ = self.storage.save_all(&self.items);
         }
 
         ui::render(ctx, self);
