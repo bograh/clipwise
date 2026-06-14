@@ -121,7 +121,11 @@ Sled is a key-value store — the directory contains its internal files, not a s
 
 The `__order__` key drives `load_all()`: on startup, its array is read first, then each UUID is fetched in order to reconstruct the list. This guarantees the window opens with exactly the same ordering the user last saw.
 
-`save_all()` is called on every mutation. It clears the tree, writes all items, and writes the fresh order array in a single sled transaction, then flushes to disk.
+Most mutations use targeted writes rather than a full rewrite:
+
+- **Dedup (existing item bumped to top)** — `save_item_and_order()` upserts the single changed item and rewrites `__order__`, then flushes.
+- **Delete** — `delete_item_and_order()` removes the single key and rewrites `__order__`, then flushes.
+- **New item / pin toggle** — `save_all()` is still used here; it clears the tree, writes all items, and writes `__order__`, then flushes.
 
 **To wipe all history:**
 ```bash
@@ -136,7 +140,7 @@ rm -rf ~/.local/share/clipwise/db
 |---|---|
 | `main.rs` | Wire up storage, watcher thread, and egui window |
 | `clipboard.rs` | `ClipboardItem` struct; background watcher thread |
-| `storage.rs` | Open sled DB; `save_all` / `load_all` |
+| `storage.rs` | Open sled DB; `load_all`; `save_all`; `save_item_and_order`; `delete_item_and_order` |
 | `app.rs` | `ClipwiseApp` state; `eframe::App::update` loop; sort logic |
 | `ui.rs` | All egui rendering; fuzzy filter; keyboard input; row actions |
 | `theme.rs` | `Color32` constants; `setup_visuals` applying the dark theme |
@@ -151,4 +155,4 @@ rm -rf ~/.local/share/clipwise/db
 
 **Collect-then-apply for UI mutations.** Item rows return an `Option<RowAction>` rather than mutating app state directly inside egui closures. This avoids Rust borrow conflicts and makes the rendering path easy to follow.
 
-**Full rewrite on every save.** `save_all` clears the sled tree and rewrites everything rather than doing surgical updates. Clipboard history is small (≤ 500 items of text) so this is fast and keeps the storage code simple.
+**Targeted storage writes for hot paths.** The dedup path (same content copied again) and delete use `save_item_and_order` / `delete_item_and_order`, which touch only the affected sled key plus `__order__`. `save_all` (clear + full rewrite) is reserved for structural changes — new items and pin toggles — where the full order may shift.
